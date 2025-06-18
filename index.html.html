@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Firebase 타이머 순위 앱</title>
+  <style>
+    body { font-family: Arial; text-align: center; margin-top: 50px; }
+    input, button { padding: 10px; margin: 5px; }
+    #app, #leaderboard { display: none; }
+    table { margin: auto; border-collapse: collapse; }
+    td, th { border: 1px solid #aaa; padding: 8px; }
+  </style>
+
+  <!-- ✅ Firebase SDK (compat 버전) -->
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.9.1/firebase-database-compat.js"></script>
+  <script>
+    // ✅ Firebase 설정
+    const firebaseConfig = {
+      apiKey: "AIzaSyDMOH8a_y2gCAmXvOCrVL2bRVAFolFNCAc",
+      authDomain: "timerapp2-af9ec.firebaseapp.com",
+      projectId: "timerapp2-af9ec",
+      storageBucket: "timerapp2-af9ec.appspot.com",
+      messagingSenderId: "716457355448",
+      appId: "1:716457355448:web:49e4c9d0beb2285bda2c4d",
+      databaseURL: "https://timerapp2-af9ec-default-rtdb.firebaseio.com"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+  </script>
+</head>
+<body>
+  <h1>⏱️ Firebase 타이머 순위 앱</h1>
+
+  <!-- 로그인 -->
+  <div id="login">
+    <input type="text" id="username" placeholder="닉네임 입력" />
+    <button onclick="login()">로그인</button>
+  </div>
+
+  <!-- 메인 앱 -->
+  <div id="app">
+    <h2>환영합니다, <span id="userDisplay"></span>님!</h2>
+    <h3>타이머: <span id="timer">0.00</span>초</h3>
+    <button onclick="startTimer()">▶️ 시작</button>
+    <button onclick="togglePause()">⏸️ 일시정지 / ▶️ 재개</button>
+    <button onclick="saveRecord()">💾 기록 저장</button>
+    <br><br>
+    <button onclick="showLeaderboard()">📊 순위 보기</button>
+    <button onclick="changeNickname()">✏️ 닉네임 변경</button>
+  </div>
+
+  <!-- 순위표 -->
+  <div id="leaderboard">
+    <h2>🏆 순위표 (긴 시간 순)</h2>
+    <table id="rankingTable">
+      <tr><th>순위</th><th>닉네임</th><th>기록 (초)</th></tr>
+    </table>
+    <button onclick="goBack()">⬅ 돌아가기</button>
+  </div>
+
+  <script>
+    let timerStart = 0;
+    let timerRunning = false;
+    let interval = null;
+    let pausedTime = 0;
+    let lastPauseTime = 0;
+    let currentUser = "";
+
+    function login() {
+      const username = document.getElementById("username").value.trim();
+      if (username === "") {
+        alert("닉네임을 입력하세요.");
+        return;
+      }
+      currentUser = username;
+      document.getElementById("userDisplay").innerText = currentUser;
+      document.getElementById("login").style.display = "none";
+      document.getElementById("app").style.display = "block";
+    }
+
+    function changeNickname() {
+      const newName = prompt("새 닉네임을 입력하세요:", currentUser);
+      if (newName && newName.trim()) {
+        currentUser = newName.trim();
+        document.getElementById("userDisplay").innerText = currentUser;
+      }
+    }
+
+    function startTimer() {
+      if (timerRunning) return;
+      timerStart = Date.now();
+      pausedTime = 0;
+      interval = setInterval(updateTimer, 100);
+      timerRunning = true;
+    }
+
+    function updateTimer() {
+      const now = Date.now();
+      const elapsed = ((now - timerStart - pausedTime) / 1000).toFixed(2);
+      document.getElementById("timer").innerText = elapsed;
+    }
+
+    function togglePause() {
+      if (!timerRunning) return;
+
+      if (interval) {
+        // 일시정지
+        clearInterval(interval);
+        interval = null;
+        lastPauseTime = Date.now();
+      } else {
+        // 재개
+        pausedTime += Date.now() - lastPauseTime;
+        interval = setInterval(updateTimer, 100);
+      }
+    }
+
+    function saveRecord() {
+  if (!timerRunning && !interval) return;
+
+  clearInterval(interval);
+  interval = null;
+  timerRunning = false;
+
+  const finalTime = parseFloat(document.getElementById("timer").innerText);
+  alert(`${finalTime.toFixed(2)}초 기록되었습니다.`);
+
+  const newRef = db.ref("records").push();
+  newRef.set({
+    name: currentUser,
+    time: finalTime
+  });
+
+  document.getElementById("timer").innerText = "0.00";
+}
+
+    function showLeaderboard() {
+      document.getElementById("app").style.display = "none";
+      document.getElementById("leaderboard").style.display = "block";
+
+      const table = document.getElementById("rankingTable");
+      table.innerHTML = "<tr><th>순위</th><th>닉네임</th><th>기록 (초)</th></tr>";
+
+      db.ref("records").once("value", (snapshot) => {
+        const data = snapshot.val();
+        const list = [];
+
+        for (let key in data) {
+          list.push(data[key]);
+        }
+
+        // 📌 긴 시간이 높은 순위로!
+        list.sort((a, b) => b.time - a.time);
+
+        list.slice(0, 10).forEach((rec, index) => {
+          const row = table.insertRow();
+          row.insertCell(0).innerText = index + 1;
+          row.insertCell(1).innerText = rec.name;
+          row.insertCell(2).innerText = rec.time.toFixed(2);
+        });
+      });
+    }
+
+    function goBack() {
+      document.getElementById("leaderboard").style.display = "none";
+      document.getElementById("app").style.display = "block";
+    }
+  </script>
+</body>
+</html>
